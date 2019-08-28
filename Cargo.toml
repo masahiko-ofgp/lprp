@@ -5,7 +5,8 @@ authors = ["Masahiko Hamazawa <ichigyo.zanmai@gmail.com>"]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
-keyword = ["parser", "s-expression"]
+keywords = ["parser", "s-expression"]
+categories = ["parser"]
 description = "lprp is S-expression reader."
 
 [dependencies]

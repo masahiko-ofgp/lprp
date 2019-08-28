@@ -1,6 +1,20 @@
 use lprp::reader::{Token, read};
 
 #[test]
+fn test_token() {
+    let num = Token::Num(12);
+    let st = Token::Str("abc".to_string());
+    let list = Token::List(vec![Token::Num(1), Token::Str("a".to_string())]);
+
+    assert_eq!(num.getn(), Some(12));
+    assert_eq!(st.gets(), Some("abc".to_string()));
+    assert_eq!(
+        list.getv(),
+        Some(vec![Token::Num(1), Token::Str("a".to_string())])
+        );
+}
+
+#[test]
 fn test_read() {
     let num = "123".to_string();
     let st = "hello".to_string();

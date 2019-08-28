@@ -15,6 +15,29 @@ pub enum Token {
     List(Vec<Token>),
 }
 
+#[allow(dead_code)]
+impl Token {
+    pub fn getn(self) -> Option<u32> {
+        match self {
+            Token::Num(n) => Some(n),
+            _ => None
+        }
+    }
+    pub fn gets(self) -> Option<String> {
+        match self {
+            Token::Str(s) => Some(s.to_string()),
+            _ => None
+        }
+    }
+    pub fn getv(self) -> Option<Vec<Self>> {
+        match self {
+            Token::List(v) => Some(v.to_vec()),
+            _ => None
+        }
+    }
+}
+
+
 fn read_list<I>(mut chars: &mut Peekable<I>) -> Token
     where I: Iterator<Item=char>
 {
