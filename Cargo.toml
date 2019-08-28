@@ -1,0 +1,11 @@
+[package]
+name = "lprp"
+version = "0.1.0"
+authors = ["Masahiko Hamazawa <ichigyo.zanmai@gmail.com>"]
+edition = "2018"
+license = "MIT"
+readme = "README.md"
+keyword = ["parser", "s-expression"]
+description = "lprp is S-expression reader."
+
+[dependencies]
