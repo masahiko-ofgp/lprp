@@ -7,11 +7,45 @@
 
 use std::iter::Peekable;
 
+fn to_symbol<'a>(s: &'a str) -> Option<Symbol> {
+    match &s[..] {
+        "cons" => Some(Symbol::Cons),
+        "car" => Some(Symbol::Car),
+        "cdr" => Some(Symbol::Cdr),
+        "define" => Some(Symbol::Define),
+        "quote" => Some(Symbol::Quote),
+        "eq" => Some(Symbol::Eq),
+        "atom" => Some(Symbol::Atom),
+        "null" => Some(Symbol::Null),
+        "assoc" => Some(Symbol::Assoc),
+        "cond" => Some(Symbol::Cond),
+        "lambda" => Some(Symbol::Lambda),
+        _ => None
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Symbol {
+    Cons,
+    Car,
+    Cdr,
+    Define,
+    Quote,
+    Eq,
+    Atom,
+    Null,
+    Assoc,
+    Cond,
+    Lambda,
+} 
+
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Nil,
     Num(u32),
     Str(String),
+    Sym(Box<Symbol>),
     List(Vec<Token>),
 }
 
@@ -26,6 +60,12 @@ impl Token {
     pub fn gets(self) -> Option<String> {
         match self {
             Token::Str(s) => Some(s.to_string()),
+            _ => None
+        }
+    }
+    pub fn getsym(self) -> Option<Symbol> {
+        match self {
+            Token::Sym(sym) => Some(*sym),
             _ => None
         }
     }
@@ -79,7 +119,12 @@ fn read_str<I>(chars: &mut Peekable<I>) -> Token
             Some(c) if c.is_alphabetic() => {
                 s.push(*c);
             }
-            _ => return Token::Str(s.to_string()),
+            _ => {
+                match to_symbol(&s) {
+                    Some(sym) => return Token::Sym(Box::new(sym)),
+                    None => return Token::Str(s.to_string()),
+                }
+            }
         }
         chars.next();
     }
