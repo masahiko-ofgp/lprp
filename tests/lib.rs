@@ -1,18 +1,15 @@
-use lprp::reader::{Token, Symbol, read};
+use lprp::reader::{Token, read};
 
 #[test]
 fn test_token() {
-    let num = Token::Num(12);
     let st = Token::Str("abc".to_string());
-    let sym = Token::Sym(Box::new(Symbol::Cons));
-    let list = Token::List(vec![Token::Num(1), Token::Str("a".to_string())]);
+    let list = Token::List(vec![Token::Str("1".to_string()), Token::Str("a".to_string())]);
 
-    assert_eq!(num.getn(), Some(12));
     assert_eq!(st.gets(), Some("abc".to_string()));
-    assert_eq!(sym.getsym(), Some(Symbol::Cons));
+
     assert_eq!(
-        list.getv(),
-        Some(vec![Token::Num(1), Token::Str("a".to_string())])
+        list.getl(),
+        Some(vec![Token::Str("1".to_string()), Token::Str("a".to_string())])
         );
 }
 
@@ -24,22 +21,22 @@ fn test_read() {
 
     assert_eq!(
         read(&num),
-        Token::Num(123)
+        Ok(Token::Str("123".to_string()))
         );
     assert_eq!(
         read(&st),
-        Token::Str("hello".to_string())
+        Ok(Token::Str("hello".to_string()))
         );
     assert_eq!(
         read(&cons),
-        Token::List(vec![
-                    Token::Sym(Box::new(Symbol::Cons)),
-                    Token::Num(1),
+        Ok(Token::List(vec![
+                    Token::Str("cons".to_string()),
+                    Token::Str("1".to_string()),
                     Token::List(vec![
-                                Token::Sym(Box::new(Symbol::Cons)),
-                                Token::Num(2),
+                                Token::Str("cons".to_string()),
+                                Token::Str("2".to_string()),
                                 Token::Str("nil".to_string())
                     ]),
-        ])
+        ]))
         );
 }

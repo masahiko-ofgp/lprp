@@ -10,3 +10,4 @@ categories = ["parser"]
 description = "lprp is S-expression reader."
 
 [dependencies]
+onigiri = "0.1.15"

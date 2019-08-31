@@ -6,70 +6,47 @@
 //  according to those terms.
 
 use std::iter::Peekable;
+use std::fmt;
+use std::error::Error;
 
-fn to_symbol<'a>(s: &'a str) -> Option<Symbol> {
-    match &s[..] {
-        "cons" => Some(Symbol::Cons),
-        "car" => Some(Symbol::Car),
-        "cdr" => Some(Symbol::Cdr),
-        "define" => Some(Symbol::Define),
-        "quote" => Some(Symbol::Quote),
-        "eq" => Some(Symbol::Eq),
-        "atom" => Some(Symbol::Atom),
-        "null" => Some(Symbol::Null),
-        "assoc" => Some(Symbol::Assoc),
-        "cond" => Some(Symbol::Cond),
-        "lambda" => Some(Symbol::Lambda),
-        _ => None
+#[derive(Debug, PartialEq, Clone)]
+pub enum ReaderError {
+    SyntaxError,
+}
+
+impl fmt::Display for ReaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            ReaderError::SyntaxError => f.write_str("Syntax Error"),
+        }
+    }
+}
+
+impl Error for ReaderError {
+    fn description(&self) -> &str {
+        match *self {
+            ReaderError::SyntaxError => "ERROR: SyntaxError",
+        }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Symbol {
-    Cons,
-    Car,
-    Cdr,
-    Define,
-    Quote,
-    Eq,
-    Atom,
-    Null,
-    Assoc,
-    Cond,
-    Lambda,
-} 
-
-
-#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
+    ERROR,
     Nil,
-    Num(u32),
     Str(String),
-    Sym(Box<Symbol>),
     List(Vec<Token>),
 }
 
 #[allow(dead_code)]
 impl Token {
-    pub fn getn(self) -> Option<u32> {
-        match self {
-            Token::Num(n) => Some(n),
-            _ => None
-        }
-    }
     pub fn gets(self) -> Option<String> {
         match self {
             Token::Str(s) => Some(s.to_string()),
             _ => None
         }
     }
-    pub fn getsym(self) -> Option<Symbol> {
-        match self {
-            Token::Sym(sym) => Some(*sym),
-            _ => None
-        }
-    }
-    pub fn getv(self) -> Option<Vec<Self>> {
+    pub fn getl(self) -> Option<Vec<Self>> {
         match self {
             Token::List(v) => Some(v.to_vec()),
             _ => None
@@ -88,11 +65,7 @@ fn read_list<I>(mut chars: &mut Peekable<I>) -> Token
     loop {
         match chars.peek() {
             Some(c) => {
-                if c.is_digit(10) {
-                    let n = read_num(&mut chars);
-                    v.push(n);
-                    chars.next();
-                } else if c.is_alphabetic() {
+                if is_tk_str(&c) {
                     let s = read_str(&mut chars);
                     v.push(s);
                     chars.next();
@@ -116,54 +89,43 @@ fn read_str<I>(chars: &mut Peekable<I>) -> Token
 
     loop {
         match chars.peek() {
-            Some(c) if c.is_alphabetic() => {
+            Some(c) if is_tk_str(&c) => {
                 s.push(*c);
             }
-            _ => {
-                match to_symbol(&s) {
-                    Some(sym) => return Token::Sym(Box::new(sym)),
-                    None => return Token::Str(s.to_string()),
-                }
-            }
+            _ => return Token::Str(s.to_string()),
         }
         chars.next();
     }
 }
 
-fn read_num<I>(chars: &mut Peekable<I>) -> Token
-    where I: Iterator<Item=char>
-{
-    let mut n = 0;
-    loop {
-        match chars.peek() {
-            Some(c) if c.is_digit(10) => {
-                n = n * 10 + c.to_digit(10).unwrap();
-            }
-            _ => return Token::Num(n),
-        }
-        chars.next();
+// Helper function
+fn is_tk_str(ch: &char) -> bool {
+    match ch {
+        'a' ..= 'z'|'A' ..= 'Z' => true,
+        '0' ..= '9' => true,
+        '+'|'-'|'*'|'/' => true,
+        '\"'|'\''|':'|'.' => true,
+        _ => false,
     }
 }
 
-pub fn read<'a>(expr: &'a str) -> Token {
+pub fn read<'a>(expr: &'a str) -> Result<Token, ReaderError> {
     let mut chars = expr.chars().peekable();
 
     let mut token = Token::Nil;
 
-    loop {
-        match chars.peek() {
-            Some(c) => {
-                if c == &'(' {
-                    token = read_list(&mut chars);
-                } else if c.is_digit(10) {
-                    token = read_num(&mut chars);
-                } else if c.is_alphabetic() {
-                    token = read_str(&mut chars);
-                } else {
-                    return token
-                }
-            },
-            None => return token,
-        }
+    match chars.peek() {
+        Some(c) => {
+            if c == &'(' {
+                token = read_list(&mut chars);
+                Ok(token)
+            } else if c == &')' {
+                Err(ReaderError::SyntaxError)
+            } else {
+                token = read_str(&mut chars);
+                Ok(token)
+            }
+        },
+        None => Ok(token),
     }
 }
