@@ -6,3 +6,4 @@
 //  according to those terms.
 
 pub mod reader;
+pub mod eval;
