@@ -152,6 +152,7 @@ fn test_read_keyword() {
 }
 
 // ***** GVar *****
+// TODO: It is necessary to support `***`, `*a**`, etc..
 fn read_global_variable<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
     where I: Iterator<Item=char>
 {
