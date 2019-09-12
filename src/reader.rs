@@ -5,9 +5,9 @@
 // This file may not be copied, modified, on distributed except
 //  according to those terms.
 
-use std::iter::Peekable;
 use std::fmt;
 use std::error::Error;
+use std::iter::Peekable;
 use onigiri::tools as tls;
 use onigiri::validator as vld;
 
@@ -15,12 +15,16 @@ use onigiri::validator as vld;
 #[derive(Debug, PartialEq, Clone)]
 pub enum LprpError {
     SyntaxError,
+    ReadError,
+    ReadNumError,
 }
 
 impl fmt::Display for LprpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            LprpError::SyntaxError => f.write_str("Syntax Error"),
+            Self::SyntaxError => f.write_str("Syntax Error"),
+            Self::ReadError => f.write_str("Read Error"),
+            Self::ReadNumError => f.write_str("Read Num Error"),
         }
     }
 }
@@ -28,7 +32,9 @@ impl fmt::Display for LprpError {
 impl Error for LprpError {
     fn description(&self) -> &str {
         match *self {
-            LprpError::SyntaxError => "SyntaxError",
+            Self::SyntaxError => "SyntaxError",
+            Self::ReadError => "ReadError",
+            Self::ReadNumError => "ReadNumError",
         }
     }
 }
@@ -38,67 +44,176 @@ pub enum Token {
     Nil,
     Int(i64),
     Float(f64),
+    Symbol(String),
+    Keyword(String),
+    GVar(String),
+    Quote(Box<Token>),
     Str(String),
     List(Vec<Token>),
 }
 
+// ***** Int, Float *****
+fn is_lprp_num(ch: &char) -> bool {
+    (ch.is_ascii_digit())||(ch == &'-')||(ch == &'.')
+}
 
-impl Token {
-    pub fn geti(&self) -> Result<i64, LprpError> {
-        match self {
-            Token::Int(i) => Ok(*i),
-            _ => Err(LprpError::SyntaxError)
-        }
-    }
-    pub fn getf(&self) -> Result<f64, LprpError> {
-        match self {
-            Token::Float(f) => Ok(*f),
-            _ => Err(LprpError::SyntaxError)
-        }
-    }
-    pub fn gets(&self) -> Result<String, LprpError> {
-        match self {
-            Token::Str(s) => Ok(s.to_string()),
-            _ => Err(LprpError::SyntaxError)
-        }
-    }
-    pub fn getl(&self) -> Result<Vec<Self>, LprpError> {
-        match self {
-            Token::List(l) => Ok(l.to_vec()),
-            _ => Err(LprpError::SyntaxError)
-        }
-    }
-    pub fn car(&self) -> Result<Self, LprpError> {
-        match self {
-            Token::List(l) => {
-                match l.first() {
-                    Some(tk) => Ok(tk.clone()),
-                    None => Ok(Token::Nil),
+fn read_num<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
+    where I: Iterator<Item=char>
+{
+    let mut num: Vec<char> = vec![];
+
+    loop {
+        match chars.peek() {
+            Some(c) if is_lprp_num(&c) => {
+                num.push(*c);
+            }
+            _ => {
+                if vld::is_integer(&num) {
+                    return Ok(Token::Int(tls::cast::<i64>(&num).unwrap()));
+                } else if vld::is_float(&num) {
+                    return Ok(Token::Float(tls::cast::<f64>(&num).unwrap()));
+                } else {
+                    return Err(LprpError::ReadNumError);
                 }
-            },
-            _ => Err(LprpError::SyntaxError),
+            }
         }
-    }
-    pub fn cdr(&self) -> Result<Self, LprpError> {
-        match self {
-            Token::List(l) => {
-                match l.split_first() {
-                    Some((_, tl)) => {
-                        match tl.len() {
-                            0 => Ok(Token::List(vec![Token::Nil])),
-                            1 => Ok(Token::List(vec![tl[0].clone()])),
-                            _ => Ok(Token::List(tl.to_vec())),
-                        }
-                    },
-                    None => Ok(Token::Nil),
-                }
-            },
-            _ => Err(LprpError::SyntaxError),
-        }
+        chars.next();
     }
 }
 
-fn read_list<I>(mut chars: &mut Peekable<I>) -> Token
+#[test]
+fn test_read_num() {
+    let mut i = "123".chars().peekable();
+    let mut f = "-0.12".chars().peekable();
+    assert_eq!(read_num(&mut i), Ok(Token::Int(123)));
+    assert_eq!(read_num(&mut f), Ok(Token::Float(-0.12)));
+}
+
+// ***** Symbol *****
+fn is_lprp_symbol(ch: &char) -> bool {
+    (ch.is_ascii_alphabetic())||(ch == &'-')
+}
+
+fn read_symbol<I>(chars: &mut Peekable<I>) -> Token
+    where I: Iterator<Item=char>
+{
+    let mut sym = String::new();
+
+    loop {
+        match chars.peek() {
+            Some(c) if is_lprp_symbol(&c) => {
+                sym.push(*c);
+            }
+            _ => {
+                if (&sym[..] == "nil")||(&sym[..] == "NIL") {
+                    return Token::Nil;
+                } else {
+                    return Token::Symbol(sym.to_string());
+                }
+            }
+        }
+        chars.next();
+    }
+}
+
+#[test]
+fn test_read_symbol() {
+    let mut sym = "with-open".chars().peekable();
+    let mut error_sym = "with_open".chars().peekable();
+    let mut nil = "nil".chars().peekable();
+    assert_eq!(read_symbol(&mut sym), Token::Symbol("with-open".to_string()));
+    assert_eq!(read_symbol(&mut error_sym), Token::Symbol("with".to_string()));
+    assert_eq!(read_symbol(&mut nil), Token::Nil);
+}
+
+// ***** Keyword *****
+fn read_keyword<I>(chars: &mut Peekable<I>) -> Token
+    where I: Iterator<Item=char>
+{
+    chars.next();
+    
+    let mut k = String::new();
+
+    loop {
+        match chars.peek() {
+            Some(c) if is_lprp_symbol(&c) => {
+                k.push(*c);
+            }
+            _ => return Token::Keyword(k.to_string()),
+        }
+        chars.next();
+    }
+}
+
+#[test]
+fn test_read_keyword() {
+    let mut key = ":my-key".chars().peekable();
+    assert_eq!(read_keyword(&mut key), Token::Keyword("my-key".to_string()));
+}
+
+// ***** GVar *****
+fn read_global_variable<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
+    where I: Iterator<Item=char>
+{
+    chars.next();
+
+    let mut gv = String::new();
+    
+    loop {
+        match chars.peek() {
+            Some(c) if is_lprp_symbol(&c) => {
+                gv.push(*c);
+            }
+            _ => {
+                if chars.next() != Some('*') {
+                    return Err(LprpError::SyntaxError);
+                } else {
+                    return Ok(Token::GVar(gv.to_string()));
+                }
+            }
+        }
+        chars.next();
+    }
+}
+
+#[test]
+fn test_read_global_variable() {
+    let mut gv = "*global*".chars().peekable();
+    let mut e = "*global".chars().peekable();
+    assert_eq!(read_global_variable(&mut gv), Ok(Token::GVar("global".to_string())));
+    assert_eq!(read_global_variable(&mut e), Err(LprpError::SyntaxError));
+}
+
+// ***** Str *****
+fn read_string<I>(chars: &mut Peekable<I>) -> Token
+    where I: Iterator<Item=char>
+{
+    chars.next();
+    
+    let mut s = String::new();
+
+    loop {
+        match chars.peek() {
+            Some(c) if c != &'\"' => {
+                s.push(*c);
+            }
+            _ => {
+                chars.next();
+                return Token::Str(s.to_string());
+            }
+        }
+        chars.next();
+    }
+}
+
+#[test]
+fn test_read_string() {
+    let mut s = "\"(Oops!)\"".chars().peekable();
+    assert_eq!(read_string(&mut s), Token::Str("(Oops!)".to_string()));
+}
+
+// ***** List *****
+fn read_list<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
     where I: Iterator<Item=char>
 {
     chars.next();
@@ -108,80 +223,250 @@ fn read_list<I>(mut chars: &mut Peekable<I>) -> Token
     loop {
         match chars.peek() {
             Some(c) => {
-                if is_tk_atom(&c) {
-                    let s = read_atom(&mut chars);
-                    v.push(s);
-                    chars.next();
-                } else if c == &'(' {
-                    let l = read_list(&mut chars);
-                    v.push(l);
-                    chars.next();
-                } else {
-                    return Token::List(v.to_vec());
-                }
-            },
-            None => return Token::List(v.to_vec()),
-        }
-    }
-}
-
-fn read_atom<I>(chars: &mut Peekable<I>) -> Token
-    where I: Iterator<Item=char>
-{
-    let mut vc: Vec<char> = vec![];
-
-    loop {
-        match chars.peek() {
-            Some(c) if is_tk_atom(&c) => {
-                vc.push(*c);
-            }
-            _ => {
-                if vld::is_integer(&vc) {
-                    return Token::Int(tls::cast::<i64>(&vc).unwrap());
-                } else if vld::is_float(&vc) {
-                    return Token::Float(tls::cast::<f64>(&vc).unwrap());
-                } else {
-                    let s = tls::chars_to_string(&vc);
-                    if (tls::strcmp(&vc, "nil"))|(tls::strcmp(&vc, "NIL")) {
-                        return Token::Nil;
-                    } else {
-                        return Token::Str(s.to_string());
+                match *c {
+                    '(' => {
+                        match read_list(&mut chars) {
+                            Ok(l) => {
+                                v.push(l);
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    ')' => {
+                        chars.next();
+                        return Ok(Token::List(v.to_vec()));
+                    },
+                    ' ' => {
+                        chars.next();
+                    },
+                    '0' ..= '9'|'-' => {
+                        match read_num(&mut chars) {
+                            Ok(n) => {
+                                v.push(n);
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    'a' ..= 'z'|'A' ..= 'Z' => {
+                        v.push(read_symbol(&mut chars));
+                    },
+                    '*' => {
+                        match read_global_variable(&mut chars) {
+                            Ok(g) => {
+                                v.push(g);
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    ':' => {
+                        v.push(read_keyword(&mut chars));
+                    },
+                    '\"' => {
+                        v.push(read_string(&mut chars));
+                    },
+                    '\'' => {
+                        match read_quote(&mut chars) {
+                            Ok(q) => {
+                                v.push(q);
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    _ => {
+                        return Err(LprpError::SyntaxError);
                     }
                 }
-            }
+            },
+            _ => return Ok(Token::List(v.to_vec())),
         }
-        chars.next();
     }
 }
 
-// Check whether the character can be used in Token
-fn is_tk_atom(ch: &char) -> bool {
-    match ch {
-        'a' ..= 'z'|'A' ..= 'Z' => true,
-        '0' ..= '9' => true,
-        '+'|'-'|'*'|'/' => true,
-        '\"'|'\''|':'|'.' => true,
-        _ => false,
-    }
+#[test]
+fn test_read_list() {
+    let mut l = "(1 (2 3))".chars().peekable();
+    assert_eq!(
+        read_list(&mut l),
+        Ok(Token::List(vec![
+                    Token::Int(1),
+                    Token::List(vec![
+                                Token::Int(2),
+                                Token::Int(3),
+                    ])
+        ]))
+    );
 }
 
-pub fn read<'a>(expr: &'a str) -> Result<Token, LprpError> {
-    let mut chars = expr.chars().peekable();
-
-    let mut token = Token::Nil;
+// ***** Quote *****
+fn read_quote<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
+    where I: Iterator<Item=char>
+{
+    chars.next();
 
     match chars.peek() {
         Some(c) => {
-            if c == &'(' {
-                token = read_list(&mut chars);
-                Ok(token)
-            } else if c == &')' {
-                Err(LprpError::SyntaxError)
-            } else {
-                token = read_atom(&mut chars);
-                Ok(token)
+            match *c {
+                '(' => {
+                    match read_list(&mut chars) {
+                        Ok(l) => Ok(Token::Quote(Box::new(l))),
+                        Err(e) => Err(e)
+                    }
+                },
+                '0' ..= '9'|'-' => {
+                    match read_num(&mut chars) {
+                        Ok(n) => Ok(Token::Quote(Box::new(n))),
+                        Err(e) => Err(e),
+                    }
+                },
+                'a' ..= 'z'|'A' ..= 'Z' => Ok(Token::Quote(Box::new(read_symbol(&mut chars)))),
+                ':' => Ok(Token::Quote(Box::new(read_keyword(&mut chars)))),
+                '*' => {
+                    match read_global_variable(&mut chars) {
+                        Ok(g) => Ok(Token::Quote(Box::new(g))),
+                        Err(e) => Err(e),
+                    }
+                },
+                '\"' => Ok(Token::Quote(Box::new(read_string(&mut chars)))),
+                '\'' => {
+                    match read_quote(&mut chars) {
+                        Ok(q) => Ok(Token::Quote(Box::new(q))),
+                        Err(e) => Err(e),
+                    }
+                },
+                _ => Err(LprpError::SyntaxError)
             }
         },
-        None => Ok(token),
+        _ => Err(LprpError::SyntaxError)
     }
+}
+
+#[test]
+fn test_read_quote() {
+    let mut q = "'(1 2 3)".chars().peekable();
+    assert_eq!(
+        read_quote(&mut q),
+        Ok(Token::Quote(
+                Box::new(
+                    Token::List(vec![
+                                Token::Int(1),
+                                Token::Int(2),
+                                Token::Int(3),
+                    ]))
+                )
+            )
+        );
+}
+
+fn read_expr<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
+    where I: Iterator<Item=char>
+{
+    let mut v: Vec<Token> = vec![];
+
+    loop {
+        match chars.peek() {
+            Some(c) => {
+                match *c {
+                    '(' => {
+                        match read_list(&mut chars) {
+                            Ok(l) => {
+                                v.push(l);
+                                chars.next();
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    '0' ..= '9'|'-' => {
+                        match read_num(&mut chars) {
+                            Ok(num) => {
+                                v.push(num);
+                                chars.next();
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    'a' ..= 'z'|'A' ..= 'Z' => {
+                        v.push(read_symbol(&mut chars));
+                        chars.next();
+                    },
+                    '*' => {
+                        match read_global_variable(&mut chars) {
+                            Ok(gv) => {
+                                v.push(gv);
+                                chars.next();
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                       }
+                    },
+                    ':' => {
+                        v.push(read_keyword(&mut chars));
+                        chars.next();
+                    },
+                    '\"' => {
+                        v.push(read_string(&mut chars));
+                        chars.next();
+                    },
+                    '\'' => {
+                        match read_quote(&mut chars) {
+                            Ok(q) => {
+                                v.push(q);
+                                chars.next();
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    ' ' => {
+                        chars.next();
+                    }
+                    _ => return Err(LprpError::SyntaxError),
+                }
+            },
+            None => return Ok(Token::List(v.to_vec())),
+        }
+    }
+}
+pub fn read<'a>(expr: &'a str) -> Result<Token, LprpError> {
+    let mut chars = expr.chars().peekable();
+    match read_expr(&mut chars) {
+        Ok(ex) => {
+            match ex {
+                Token::List(l) => Ok(l[0].clone()),
+                _ => Err(LprpError::ReadError),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+#[test]
+fn test_read() {
+    let mut expr = "((1 -2.3) (*a* :b))".chars().peekable();
+    assert_eq!(
+        read_list(&mut expr),
+        Ok(Token::List(vec![
+            Token::List(vec![
+                Token::Int(1),
+                Token::Float(-2.3),
+            ]),
+            Token::List(vec![
+                Token::GVar("a".to_string()),
+                Token::Keyword("b".to_string()),
+            ])
+        ]))
+    );
 }
