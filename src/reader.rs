@@ -41,12 +41,13 @@ impl Error for LprpError {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
+    T,
     Nil,
     Int(i64),
     Float(f64),
     Symbol(String),
     Keyword(String),
-    GVar(String),
+    Special(String),
     Quote(Box<Token>),
     Str(String),
     List(Vec<Token>),
@@ -107,6 +108,8 @@ fn read_symbol<I>(chars: &mut Peekable<I>) -> Token
             _ => {
                 if (&sym[..] == "nil")||(&sym[..] == "NIL") {
                     return Token::Nil;
+                } else if &sym[..] == "t" {
+                    return Token::T;
                 } else {
                     return Token::Symbol(sym.to_string());
                 }
@@ -121,9 +124,11 @@ fn test_read_symbol() {
     let mut sym = "with-open".chars().peekable();
     let mut error_sym = "with_open".chars().peekable();
     let mut nil = "nil".chars().peekable();
+    let mut t = "t".chars().peekable();
     assert_eq!(read_symbol(&mut sym), Token::Symbol("with-open".to_string()));
     assert_eq!(read_symbol(&mut error_sym), Token::Symbol("with".to_string()));
     assert_eq!(read_symbol(&mut nil), Token::Nil);
+    assert_eq!(read_symbol(&mut t), Token::T);
 }
 
 // ***** Keyword *****
@@ -151,25 +156,31 @@ fn test_read_keyword() {
     assert_eq!(read_keyword(&mut key), Token::Keyword("my-key".to_string()));
 }
 
-// ***** GVar *****
-// TODO: It is necessary to support `***`, `*a**`, etc..
-fn read_global_variable<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
+// ***** Special *****
+fn is_lprp_special(ch: &char) -> bool {
+    (is_lprp_symbol(&ch))||(ch == &'*')
+}
+
+fn read_special<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
     where I: Iterator<Item=char>
 {
-    chars.next();
-
-    let mut gv = String::new();
+    let mut sp: Vec<char> = vec![];;
     
     loop {
         match chars.peek() {
-            Some(c) if is_lprp_symbol(&c) => {
-                gv.push(*c);
+            Some(c) if is_lprp_special(&c) => {
+                sp.push(*c);
             }
             _ => {
-                if chars.next() != Some('*') {
+                let cnt = &sp.iter()
+                    .filter(|&c| c == &'*')
+                    .count();
+                if cnt != &2_usize {
                     return Err(LprpError::SyntaxError);
                 } else {
-                    return Ok(Token::GVar(gv.to_string()));
+                    let sp2 = tls::chars_to_string(&sp);
+                    let sp3 = &sp2.trim_matches('*');
+                    return Ok(Token::Special(sp3.to_string()));
                 }
             }
         }
@@ -178,11 +189,16 @@ fn read_global_variable<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
 }
 
 #[test]
-fn test_read_global_variable() {
-    let mut gv = "*global*".chars().peekable();
-    let mut e = "*global".chars().peekable();
-    assert_eq!(read_global_variable(&mut gv), Ok(Token::GVar("global".to_string())));
-    assert_eq!(read_global_variable(&mut e), Err(LprpError::SyntaxError));
+fn test_read_special() {
+    let mut sp = "*special*".chars().peekable();
+    let mut e = "*special".chars().peekable();
+    let mut e2 = "***".chars().peekable();
+    assert_eq!(
+        read_special(&mut sp),
+        Ok(Token::Special("special".to_string()))
+        );
+    assert_eq!(read_special(&mut e), Err(LprpError::SyntaxError));
+    assert_eq!(read_special(&mut e2), Err(LprpError::SyntaxError));
 }
 
 // ***** Str *****
@@ -256,9 +272,9 @@ fn read_list<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                         v.push(read_symbol(&mut chars));
                     },
                     '*' => {
-                        match read_global_variable(&mut chars) {
-                            Ok(g) => {
-                                v.push(g);
+                        match read_special(&mut chars) {
+                            Ok(sp) => {
+                                v.push(sp);
                             },
                             Err(e) => {
                                 return Err(e);
@@ -330,8 +346,8 @@ fn read_quote<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                 'a' ..= 'z'|'A' ..= 'Z' => Ok(Token::Quote(Box::new(read_symbol(&mut chars)))),
                 ':' => Ok(Token::Quote(Box::new(read_keyword(&mut chars)))),
                 '*' => {
-                    match read_global_variable(&mut chars) {
-                        Ok(g) => Ok(Token::Quote(Box::new(g))),
+                    match read_special(&mut chars) {
+                        Ok(sp) => Ok(Token::Quote(Box::new(sp))),
                         Err(e) => Err(e),
                     }
                 },
@@ -402,9 +418,9 @@ fn read_expr<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                         chars.next();
                     },
                     '*' => {
-                        match read_global_variable(&mut chars) {
-                            Ok(gv) => {
-                                v.push(gv);
+                        match read_special(&mut chars) {
+                            Ok(sp) => {
+                                v.push(sp);
                                 chars.next();
                             },
                             Err(e) => {
@@ -465,7 +481,7 @@ fn test_read() {
                 Token::Float(-2.3),
             ]),
             Token::List(vec![
-                Token::GVar("a".to_string()),
+                Token::Special("a".to_string()),
                 Token::Keyword("b".to_string()),
             ])
         ]))

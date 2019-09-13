@@ -6,22 +6,20 @@ lprp ('l'eft 'p'aren 'r'ight 'p'aren) is simple S-expression reader.
 - [x] Float
 - [x] Symbol
 - [x] Keyword
-- [x] Global variable
+- [x] Special
 - [x] List
 - [x] Quote
 - [x] Nil
 
 ```
-use lprp::reader::read;
+use lprp::reader::{read, Token};
 
 fn main() {
     let sexp = "(cons (cons 1 2.0) (cons \"Hello world!!\" nil))".to_string();
 
-    let result = read(&sexp).unwrap();
-
     assert_eq!(
-        result,
-        Token::List(vec![
+        read(&sexp),
+        Ok(Token::List(vec![
                     Token::Symbol("cons".to_string()),
                     Token::List(vec![
                                 Token::Symbol("cons".to_string()),
@@ -29,11 +27,11 @@ fn main() {
                                 Token::Float(2.0)
                     ]),
                     Token::List(vec![
-                                Token::Str("cons".to_string()),
+                                Token::Symbol("cons".to_string()),
                                 Token::Str("Hello, world!!"),
                                 Token::Nil
                     ])
-        ])
+        ]))
     );
 }
 ```
