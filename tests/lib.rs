@@ -3,7 +3,7 @@ use lprp::reader::{read, Token};
 #[test]
 fn test_read() {
     let gv = "*global*".to_string();
-    assert_eq!(read(&gv), Ok(Token::Special("global".to_string())));
+    assert_eq!(read(&gv), Ok(Token::Symbol("*global*".to_string())));
 
     let expr = "(cons (cons -1 2.0) (cons \"Hello, world!!\" nil))".to_string();
     assert_eq!(

@@ -5,11 +5,10 @@ lprp ('l'eft 'p'aren 'r'ight 'p'aren) is simple S-expression reader.
 - [x] Int
 - [x] Float
 - [x] Symbol
-- [x] Keyword
-- [x] Special
 - [x] List
 - [x] Quote
 - [x] Nil
+- [x] T
 
 ```
 use lprp::reader::{read, Token};

@@ -46,8 +46,6 @@ pub enum Token {
     Int(i64),
     Float(f64),
     Symbol(String),
-    Keyword(String),
-    Special(String),
     Quote(Box<Token>),
     Str(String),
     List(Vec<Token>),
@@ -131,20 +129,36 @@ fn test_read_symbol() {
     assert_eq!(read_symbol(&mut t), Token::T);
 }
 
-// ***** Keyword *****
-fn read_keyword<I>(chars: &mut Peekable<I>) -> Token
+// ***** Keyword Symbol *****
+fn is_lprp_keyword(ch: &char) -> bool {
+    (is_lprp_symbol(&ch))||(ch == &':')
+}
+
+fn read_keyword<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
     where I: Iterator<Item=char>
 {
-    chars.next();
-    
-    let mut k = String::new();
+    let mut k: Vec<char> = vec![];
 
     loop {
         match chars.peek() {
-            Some(c) if is_lprp_symbol(&c) => {
+            Some(c) if is_lprp_keyword(&c) => {
                 k.push(*c);
             }
-            _ => return Token::Keyword(k.to_string()),
+            _ => {
+                let cnt = &k.iter()
+                    .filter(|&c| c == &':')
+                    .count();
+                if cnt != &1_usize {
+                    return Err(LprpError::SyntaxError);
+                } else {
+                    let k2 = tls::chars_to_string(&k);
+                    if !k2.starts_with(':') {
+                        return Err(LprpError::SyntaxError);
+                    } else {
+                        return Ok(Token::Symbol(k2.to_string()));
+                    }
+                }
+            }
         }
         chars.next();
     }
@@ -153,10 +167,18 @@ fn read_keyword<I>(chars: &mut Peekable<I>) -> Token
 #[test]
 fn test_read_keyword() {
     let mut key = ":my-key".chars().peekable();
-    assert_eq!(read_keyword(&mut key), Token::Keyword("my-key".to_string()));
+    let mut err_key = ":error:".chars().peekable();
+    assert_eq!(
+        read_keyword(&mut key),
+        Ok(Token::Symbol(":my-key".to_string()))
+        );
+    assert_eq!(
+        read_keyword(&mut err_key),
+        Err(LprpError::SyntaxError),
+        );
 }
 
-// ***** Special *****
+// ***** Special Symbol *****
 fn is_lprp_special(ch: &char) -> bool {
     (is_lprp_symbol(&ch))||(ch == &'*')
 }
@@ -179,8 +201,11 @@ fn read_special<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
                     return Err(LprpError::SyntaxError);
                 } else {
                     let sp2 = tls::chars_to_string(&sp);
-                    let sp3 = &sp2.trim_matches('*');
-                    return Ok(Token::Special(sp3.to_string()));
+                    if (sp2.starts_with('*'))&&(sp2.ends_with('*')) {
+                        return Ok(Token::Symbol(sp2.to_string()));
+                    } else {
+                        return Err(LprpError::SyntaxError);
+                    }
                 }
             }
         }
@@ -195,7 +220,7 @@ fn test_read_special() {
     let mut e2 = "***".chars().peekable();
     assert_eq!(
         read_special(&mut sp),
-        Ok(Token::Special("special".to_string()))
+        Ok(Token::Symbol("*special*".to_string()))
         );
     assert_eq!(read_special(&mut e), Err(LprpError::SyntaxError));
     assert_eq!(read_special(&mut e2), Err(LprpError::SyntaxError));
@@ -282,7 +307,14 @@ fn read_list<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                         }
                     },
                     ':' => {
-                        v.push(read_keyword(&mut chars));
+                        match read_keyword(&mut chars) {
+                            Ok(k) => {
+                                v.push(k);
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     },
                     '\"' => {
                         v.push(read_string(&mut chars));
@@ -344,7 +376,12 @@ fn read_quote<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                     }
                 },
                 'a' ..= 'z'|'A' ..= 'Z' => Ok(Token::Quote(Box::new(read_symbol(&mut chars)))),
-                ':' => Ok(Token::Quote(Box::new(read_keyword(&mut chars)))),
+                ':' => {
+                    match read_keyword(&mut chars) {
+                        Ok(k) => Ok(Token::Quote(Box::new(k))),
+                        Err(e) => Err(e),
+                    }
+                },
                 '*' => {
                     match read_special(&mut chars) {
                         Ok(sp) => Ok(Token::Quote(Box::new(sp))),
@@ -429,8 +466,15 @@ fn read_expr<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                        }
                     },
                     ':' => {
-                        v.push(read_keyword(&mut chars));
-                        chars.next();
+                        match read_keyword(&mut chars) {
+                            Ok(k) => {
+                                v.push(k);
+                                chars.next();
+                            },
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     },
                     '\"' => {
                         v.push(read_string(&mut chars));
@@ -481,8 +525,8 @@ fn test_read() {
                 Token::Float(-2.3),
             ]),
             Token::List(vec![
-                Token::Special("a".to_string()),
-                Token::Keyword("b".to_string()),
+                Token::Symbol("*a*".to_string()),
+                Token::Symbol(":b".to_string()),
             ])
         ]))
     );
