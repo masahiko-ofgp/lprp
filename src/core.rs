@@ -10,8 +10,15 @@ pub fn eq(lhs: &Token, rhs: &Token) -> bool {
 #[test]
 fn test_eq() {
     let list_1 = read("'(1 2 3)").unwrap();
-    let list_2 = read("'(1 2 3)").unwrap();
-    assert_eq!(eq(&list_1, &list_2), true);
+    assert_eq!(eq(
+            &list_1,
+            &Token::Quote(Box::new(Token::List(vec![
+                                               Token::Int(1),
+                                               Token::Int(2),
+                                               Token::Int(3),
+            ])))),
+            true
+            );
 
     let sym_1 = read("cons").unwrap();
     let sym_2 = read("conj").unwrap();
@@ -89,4 +96,38 @@ fn test_cdr() {
         cdr(&quote_list),
         Some(Token::List(vec![Token::Int(2), Token::Int(3)]))
         );
+}
+
+// Check whether List's car is symbol or not.
+pub fn is_car_sym(tk: &Token) -> bool {
+    match car(tk) {
+        Some(t) => {
+            match t {
+                Token::Symbol(_) => true,
+                _ => false,
+            }
+        },
+        None => false
+    }
+}
+
+#[test]
+fn test_is_car_sym() {
+    let list = Token::List(vec![
+                           Token::Symbol("cons".to_string()),
+                           Token::Int(1),
+                           Token::Nil
+    ]);
+    assert!(is_car_sym(&list));
+
+    let e = Token::List(vec![Token::Int(1), Token::Int(2)]);
+    assert!(!is_car_sym(&e));
+
+    let quote = Token::Quote(Box::new(
+            Token::List(vec![
+                        Token::Symbol("cons".to_string()),
+                        Token::Float(1.2),
+                        Token::Str("Hello".to_string())
+            ])));
+    assert!(is_car_sym(&quote));
 }
