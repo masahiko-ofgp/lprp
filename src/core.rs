@@ -131,3 +131,32 @@ fn test_is_car_sym() {
             ])));
     assert!(is_car_sym(&quote));
 }
+
+// If List's car is symbol, return symbol.
+pub fn get_sym(tk: &Token) -> Option<&Token> {
+    if is_car_sym(tk) {
+        Some(car(tk).unwrap())
+    } else {
+        None
+    }
+}
+
+#[test]
+fn test_get_sym() {
+    let list = Token::List(vec![
+                           Token::Symbol("format".to_string()),
+                           Token::T,
+                           Token::Str("Hello".to_string())
+    ]);
+    assert_eq!(
+        get_sym(&list),
+        Some(&Token::Symbol("format".to_string()))
+        );
+
+    let e = Token::Quote(Box::new(
+            Token::List(vec![
+                        Token::Int(1),
+                        Token::Int(2),
+            ])));
+    assert_eq!(get_sym(&e), None);
+}
