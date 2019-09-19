@@ -160,3 +160,32 @@ fn test_get_sym() {
             ])));
     assert_eq!(get_sym(&e), None);
 }
+
+pub fn get_args(tk: &Token) -> Option<Token> {
+    if is_car_sym(tk) {
+        Some(cdr(tk).unwrap())
+    } else {
+        None
+    }
+}
+
+#[test]
+fn test_get_args() {
+    let list = Token::List(vec![
+                           Token::Symbol("car".to_string()),
+                           Token::Quote(Box::new(
+                                   Token::List(vec![
+                                               Token::Int(1),
+                                               Token::Int(2)
+                                   ])))
+    ]);
+    assert_eq!(
+        get_args(&list),
+        Some(Token::List(vec![
+                         Token::Quote(Box::new(
+                                 Token::List(vec![
+                                             Token::Int(1),
+                                             Token::Int(2)
+                                 ])))
+        ])));
+}
