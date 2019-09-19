@@ -17,6 +17,7 @@ pub enum LprpError {
     SyntaxError,
     ReadError,
     ReadNumError,
+    ConversionError,
 }
 
 impl fmt::Display for LprpError {
@@ -25,6 +26,7 @@ impl fmt::Display for LprpError {
             Self::SyntaxError => f.write_str("Syntax Error"),
             Self::ReadError => f.write_str("Read Error"),
             Self::ReadNumError => f.write_str("Read Num Error"),
+            Self::ConversionError => f.write_str("Conversion Error"),
         }
     }
 }
@@ -35,6 +37,7 @@ impl Error for LprpError {
             Self::SyntaxError => "SyntaxError",
             Self::ReadError => "ReadError",
             Self::ReadNumError => "ReadNumError",
+            Self::ConversionError => "ConversionError: Not support its type."
         }
     }
 }
@@ -49,6 +52,46 @@ pub enum Token {
     Quote(Box<Token>),
     Str(String),
     List(Vec<Token>),
+}
+
+impl Into<Result<i64, LprpError>> for Token {
+    fn into(self) -> Result<i64, LprpError> {
+        match self {
+            Token::Int(i) => Ok(i),
+            _ => Err(LprpError::ConversionError),
+        }
+    }
+}
+
+impl Into<Result<f64, LprpError>> for Token {
+    fn into(self) -> Result<f64, LprpError> {
+        match self {
+            Token::Float(f) => Ok(f),
+            _ => Err(LprpError::ConversionError),
+        }
+    }
+}
+
+impl Into<Result<String, LprpError>> for Token {
+    fn into(self) -> Result<String, LprpError> {
+        match self {
+            Token::Symbol(sym) => Ok(sym.to_string()),
+            Token::Str(s) => {
+                let mut dq = String::from("\"");
+                dq.push_str(&s);
+                dq.push_str("\"");
+                Ok(dq.to_string())
+            },
+            _ => Err(LprpError::ConversionError),
+        }
+    }
+}
+
+#[test]
+fn test_token_into() {
+    let st = Token::Str("Hello, world!!".to_string());
+    let st2: Result<String, LprpError> = st.into();
+    assert_eq!(st2, Ok("\"Hello, world!!\"".to_string()));
 }
 
 // ***** Int, Float *****
