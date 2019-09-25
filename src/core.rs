@@ -1,6 +1,12 @@
-use crate::reader::Token;
-#[cfg(test)]
-use crate::reader::read;
+// Copyright 2019 Masahiko Hamazawa
+//
+// Licensed under the MIT license <LICENSE or
+//  http://opensource.org/licenses/MIT>.
+// This file may not be copied, modified, on distributed except
+//  according to those terms.
+
+use crate::reader::{read, Token};
+
 
 // ***** eq *****
 pub fn eq(lhs: &Token, rhs: &Token) -> bool {
@@ -63,10 +69,16 @@ pub fn car(tk: &Token) -> Option<&Token> {
 #[test]
 fn test_car() {
     let list = read("(cons 1 2)").unwrap();
-    assert_eq!(car(&list), Some(&Token::Symbol("cons".to_string())));
+    assert_eq!(
+        car(&list),
+        Some(&Token::Symbol("cons".to_string()))
+        );
 
     let quote_list = read("'(1 2 3)").unwrap();
-    assert_eq!(car(&quote_list), Some(&Token::Int(1)));
+    assert_eq!(
+        car(&quote_list),
+        Some(&Token::Int(1))
+        );
 }
 
 // ***** cdr *****
@@ -113,22 +125,13 @@ pub fn is_car_sym(tk: &Token) -> bool {
 
 #[test]
 fn test_is_car_sym() {
-    let list = Token::List(vec![
-                           Token::Symbol("cons".to_string()),
-                           Token::Int(1),
-                           Token::Nil
-    ]);
+    let list = read("(cons 1 nil)").unwrap();
     assert!(is_car_sym(&list));
 
-    let e = Token::List(vec![Token::Int(1), Token::Int(2)]);
+    let e = read("'(1 2 3)").unwrap();
     assert!(!is_car_sym(&e));
 
-    let quote = Token::Quote(Box::new(
-            Token::List(vec![
-                        Token::Symbol("cons".to_string()),
-                        Token::Float(1.2),
-                        Token::Str("Hello".to_string())
-            ])));
+    let quote = read("'(cons 1.2 \"Hello\")").unwrap();
     assert!(is_car_sym(&quote));
 }
 
@@ -143,21 +146,14 @@ pub fn get_sym(tk: &Token) -> Option<&Token> {
 
 #[test]
 fn test_get_sym() {
-    let list = Token::List(vec![
-                           Token::Symbol("format".to_string()),
-                           Token::T,
-                           Token::Str("Hello".to_string())
-    ]);
+    let list = read("(format t \"Hello\")").unwrap();
+
     assert_eq!(
         get_sym(&list),
         Some(&Token::Symbol("format".to_string()))
         );
 
-    let e = Token::Quote(Box::new(
-            Token::List(vec![
-                        Token::Int(1),
-                        Token::Int(2),
-            ])));
+    let e = read("'(1 2 3)").unwrap();
     assert_eq!(get_sym(&e), None);
 }
 
@@ -171,14 +167,8 @@ pub fn get_args(tk: &Token) -> Option<Token> {
 
 #[test]
 fn test_get_args() {
-    let list = Token::List(vec![
-                           Token::Symbol("car".to_string()),
-                           Token::Quote(Box::new(
-                                   Token::List(vec![
-                                               Token::Int(1),
-                                               Token::Int(2)
-                                   ])))
-    ]);
+    let list = read("(car '(1 2))").unwrap();
+
     assert_eq!(
         get_args(&list),
         Some(Token::List(vec![
@@ -188,4 +178,15 @@ fn test_get_args() {
                                              Token::Int(2)
                                  ])))
         ])));
+}
+
+pub fn eval<'a>(exp: &'a str) -> Token {
+    let token = read(exp).unwrap();
+    
+    if atom(&token) {
+        return token;
+    } else {
+        // TODO: Temporary return value
+        return Token::Nil;
+    }
 }
