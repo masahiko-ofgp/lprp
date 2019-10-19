@@ -5,7 +5,7 @@
 // This file may not be copied, modified, on distributed except
 //  according to those terms.
 
-use crate::reader::{read, Token};
+use crate::reader::{read, Token, LprpError};
 
 
 // ***** eq *****
@@ -108,6 +108,11 @@ fn test_cdr() {
         cdr(&quote_list),
         Some(Token::List(vec![Token::Int(2), Token::Int(3)]))
         );
+
+    assert_eq!(
+        car(&cdr(&quote_list).unwrap()),
+        Some(&Token::Int(2)),
+        );
 }
 
 // Check whether List's car is symbol or not.
@@ -180,13 +185,17 @@ fn test_get_args() {
         ])));
 }
 
-pub fn eval<'a>(exp: &'a str) -> Token {
+
+pub fn eval<'a>(exp: &'a str) -> Result<Token, LprpError> {
     let token = read(exp).unwrap();
     
     if atom(&token) {
-        return token;
+        return Ok(token);
     } else {
-        // TODO: Temporary return value
-        return Token::Nil;
+        match get_sym(&token) {
+            // TODO: Temporary return.
+            Some(sym) => return Ok(sym.clone()),
+            None => return Err(LprpError::SyntaxError)
+        }
     }
 }

@@ -323,7 +323,7 @@ fn read_list<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                         chars.next();
                         return Ok(Token::List(v.to_vec()));
                     },
-                    ' ' => {
+                    ' '|'\n'|'\t' => {
                         chars.next();
                     },
                     '0' ..= '9'|'-' => {
@@ -534,7 +534,7 @@ fn read_expr<I>(mut chars: &mut Peekable<I>) -> Result<Token, LprpError>
                             }
                         }
                     },
-                    ' ' => {
+                    ' '|'\n'|'\t' => {
                         chars.next();
                     }
                     _ => return Err(LprpError::SyntaxError),
@@ -559,7 +559,7 @@ pub fn read<'a>(expr: &'a str) -> Result<Token, LprpError> {
 
 #[test]
 fn test_read() {
-    let mut expr = "((1 -2.3) (*a* :b))".chars().peekable();
+    let mut expr ="((1 -2.3)\n (*a* :b))".chars().peekable();
     assert_eq!(
         read_list(&mut expr),
         Ok(Token::List(vec![
