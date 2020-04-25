@@ -30,7 +30,7 @@ impl fmt::Display for LprpError {
         }
     }
 }
-
+/*
 impl Error for LprpError {
     fn description(&self) -> &str {
         match *self {
@@ -40,7 +40,7 @@ impl Error for LprpError {
             Self::ConversionError => "ConversionError: Not support its type."
         }
     }
-}
+}*/
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -229,7 +229,7 @@ fn is_lprp_special(ch: &char) -> bool {
 fn read_special<I>(chars: &mut Peekable<I>) -> Result<Token, LprpError>
     where I: Iterator<Item=char>
 {
-    let mut sp: Vec<char> = vec![];;
+    let mut sp: Vec<char> = vec![];
     
     loop {
         match chars.peek() {

@@ -18,7 +18,7 @@ fn main() {
                     println!("{:?}", r);
                 },
                 Err(e) => {
-                    eprintln!("{:?}", e.description());
+                    eprintln!("{:?}", e);
                     break;
                 }
             }
